@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
@@ -21,6 +23,20 @@ public class KafkaConfiguration {
 
     @Value("${spring.kafka.consumer.group-id}")
     private String groupId;
+
+    @Bean
+    public DefaultErrorHandler errorHandler() {
+        // Configure retry attempts and backoff
+        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(3); // Maximum 3 retries
+        backOff.setInitialInterval(1000);  // 1 second
+        backOff.setMultiplier(2.0);        // Exponential backoff multiplier
+        backOff.setMaxInterval(10000);    // Maximum backoff interval
+
+        return new DefaultErrorHandler((record, exception) -> {
+            // Handle after retries are exhausted
+            System.err.println("Retries exhausted for record: " + record);
+        }, backOff);
+    }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, CarParkAvailabilityMessage> kafkaListenerContainerFactory() {
