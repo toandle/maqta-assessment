@@ -95,23 +95,7 @@ public class CarParkingService {
             carParkInfoRepository.saveAll(newCarParkInfos);
         }
     }
-
-    private CarParkInfo transFromCarParkInfoDTO2Entity(CarParkAvailabilityMessage.CarParkInfoDTO carParkInfoDTO, CarPark carPark) {
-        var existingCarParkInfo = carPark.getCarParkInfo()
-                .stream()
-                .filter((CarParkInfo info) -> Objects.equals(info.getLotType(), carParkInfoDTO.getLotType()))
-                .findFirst();
-        var carParkInfo = new CarParkInfo();
-        carParkInfo.setTotalLots(safeParse(carParkInfoDTO.getTotalLots()));
-        carParkInfo.setLotType(carParkInfoDTO.getLotType());
-        carParkInfo.setLotsAvailable(safeParse(carParkInfoDTO.getLotsAvailable()));
-        carParkInfo.setCarPark(carPark);
-
-        existingCarParkInfo.ifPresent(parkInfo -> carParkInfo.setId(parkInfo.getId()));
-
-        return carParkInfo;
-    }
-
+    
     private static int safeParse(String numberString) {
         try {
             return Integer.parseInt(numberString);
