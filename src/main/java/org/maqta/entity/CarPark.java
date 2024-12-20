@@ -1,12 +1,12 @@
 package org.maqta.entity;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-//import org.maqta.converter.CarParkInfoJsonConverter;
 
 import javax.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -55,7 +55,6 @@ public class CarPark {
     @Column(name = "car_park_basement", nullable = false)
     private String carParkBasement;
 
-    @Column(name = "car_park_info", columnDefinition = "jsonb")
-//    @Convert(converter = CarParkInfoJsonConverter.class)
-    private String carParkInfo;
+    @OneToMany(mappedBy = "carPark", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    private List<CarParkInfo> carParkInfo = new ArrayList<>();
 }

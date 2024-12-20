@@ -12,6 +12,16 @@ CREATE TABLE car_park (
     night_parking VARCHAR(3) NOT NULL,
     car_park_desks INT NOT NULL DEFAULT 0,
     gantry_height DOUBLE PRECISION NOT NULL,
-    car_park_basement VARCHAR(1) NOT NULL,
-    car_park_info TEXT DEFAULT '[]'
+    car_park_basement VARCHAR(1) NOT NULL
 );
+
+-- Create the car_park_info table
+CREATE TABLE car_park_info (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    total_lots INT NOT NULL,
+    lot_type VARCHAR(5) NOT NULL,
+    lots_available INT,
+    car_park_id UUID NOT NULL,
+    CONSTRAINT fk_car_park FOREIGN KEY (car_park_id) REFERENCES car_park(id) ON DELETE CASCADE
+);
+

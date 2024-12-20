@@ -1,10 +1,9 @@
 package org.maqta.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.maqta.entity.CarPark;
 import org.maqta.entity.CarParkInfo;
 import org.maqta.model.*;
+import org.maqta.repository.ICarParkInfoRepository;
 import org.maqta.repository.ICarParkRepository;
 import org.maqta.util.PaginationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +13,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import javax.transaction.Transactional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +22,9 @@ public class CarParkingService {
 
     @Autowired
     private ICarParkRepository carParkingRepository;
+
+    @Autowired
+    private ICarParkInfoRepository carParkInfoRepository;
 
     @Value("${app.feature.radius}")
     private int radius;
@@ -38,6 +39,7 @@ public class CarParkingService {
         return carParks.getContent().stream().map(this::transformToDTO).collect(Collectors.toList());
     }
 
+    @Transactional
     public void updateCarParkAvailability(List<CarParkAvailabilityMessage.CarParkData> carParkList) {
         Map<String, List<CarParkAvailabilityMessage.CarParkInfoDTO>> carParkMap = carParkList.stream()
                 .collect(Collectors.toMap(
@@ -52,24 +54,60 @@ public class CarParkingService {
         List<String> carParkNumbers = new ArrayList<>(carParkMap.keySet());
 
         List<CarPark> carParks = carParkingRepository.findAllByCarParkNoIn(carParkNumbers);
+        List<CarParkInfo> updatedCarParkInfos = new ArrayList<>();
+        List<CarParkInfo> newCarParkInfos = new ArrayList<>();
+
         for (CarPark carPark: carParks) {
-            List<CarParkAvailabilityMessage.CarParkInfoDTO> carParkInfoDTO = carParkMap.get(carPark.getCarParkNo());
-            List<CarParkInfo> carParkInfo = carParkInfoDTO.stream().map(this::transFromCarParkInfoDTO2Entity).collect(Collectors.toList());
+            List<CarParkAvailabilityMessage.CarParkInfoDTO> carParkInfoDTOList = carParkMap.get(carPark.getCarParkNo());
+            for (CarParkAvailabilityMessage.CarParkInfoDTO carParkInfoDTO : carParkInfoDTOList) {
+                // Check if there's an existing entry for the same lotType
+                var existingCarParkInfo = carPark.getCarParkInfo()
+                        .stream()
+                        .filter(info -> Objects.equals(info.getLotType(), carParkInfoDTO.getLotType()))
+                        .findFirst();
 
-            var objectMapper = new ObjectMapper();
-            String jsonNode = String.valueOf(objectMapper.valueToTree(carParkInfo));
-
-            carPark.setCarParkInfo(jsonNode);
+                if (existingCarParkInfo.isPresent()) {
+                    // Update existing entry
+                    CarParkInfo carParkInfo = existingCarParkInfo.get();
+                    carParkInfo.setTotalLots(safeParse(carParkInfoDTO.getTotalLots()));
+                    carParkInfo.setLotsAvailable(safeParse(carParkInfoDTO.getLotsAvailable()));
+                    updatedCarParkInfos.add(carParkInfo);
+                } else {
+                    // Create new entry
+                    CarParkInfo carParkInfo = new CarParkInfo();
+                    carParkInfo.setTotalLots(safeParse(carParkInfoDTO.getTotalLots()));
+                    carParkInfo.setLotType(carParkInfoDTO.getLotType());
+                    carParkInfo.setLotsAvailable(safeParse(carParkInfoDTO.getLotsAvailable()));
+                    carParkInfo.setCarPark(carPark);
+                    newCarParkInfos.add(carParkInfo);
+                }
+            }
         }
 
-        carParkingRepository.saveAll(carParks);
+        // Save updated entries
+        if (!updatedCarParkInfos.isEmpty()) {
+            carParkInfoRepository.saveAll(updatedCarParkInfos);
+        }
+
+
+        // Save new entries
+        if(!newCarParkInfos.isEmpty()) {
+            carParkInfoRepository.saveAll(newCarParkInfos);
+        }
     }
 
-    private CarParkInfo transFromCarParkInfoDTO2Entity(CarParkAvailabilityMessage.CarParkInfoDTO carParkInfoDTO) {
+    private CarParkInfo transFromCarParkInfoDTO2Entity(CarParkAvailabilityMessage.CarParkInfoDTO carParkInfoDTO, CarPark carPark) {
+        var existingCarParkInfo = carPark.getCarParkInfo()
+                .stream()
+                .filter((CarParkInfo info) -> Objects.equals(info.getLotType(), carParkInfoDTO.getLotType()))
+                .findFirst();
         var carParkInfo = new CarParkInfo();
         carParkInfo.setTotalLots(safeParse(carParkInfoDTO.getTotalLots()));
         carParkInfo.setLotType(carParkInfoDTO.getLotType());
         carParkInfo.setLotsAvailable(safeParse(carParkInfoDTO.getLotsAvailable()));
+        carParkInfo.setCarPark(carPark);
+
+        existingCarParkInfo.ifPresent(parkInfo -> carParkInfo.setId(parkInfo.getId()));
 
         return carParkInfo;
     }
@@ -83,29 +121,14 @@ public class CarParkingService {
     }
 
     private FindParkingLotResponse transformToDTO(CarPark carPark) {
-        String carParkInfoString = carPark.getCarParkInfo();
-        // Initialize ObjectMapper to deserialize the string into JsonNode
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode carParkInfoNode = null;
         int totalLots = 0;
         int availableLots = 0;
+        List<CarParkInfo> carParkInfoList = carPark.getCarParkInfo();
 
-        try {
-            // Deserialize the string to JsonNode (if it's valid JSON)
-            carParkInfoNode = objectMapper.readTree(carParkInfoString);
-        } catch (Exception e) {
-            System.out.println("Cannot parse car park info");
-        }
-
-        if (carParkInfoNode != null && carParkInfoNode.isArray()) {
-            for (JsonNode item : carParkInfoNode) {
-                if (item.has("total_lots")) {
-                    totalLots += item.get("total_lots").asInt();
-                }
-
-                if (item.has("lots_available")) {
-                    availableLots += item.get("lots_available").asInt();
-                }
+        if (carParkInfoList != null) {
+            for (CarParkInfo carParkInfo : carParkInfoList) {
+                totalLots += carParkInfo.getTotalLots();
+                availableLots += carParkInfo.getLotsAvailable();
             }
         }
 
