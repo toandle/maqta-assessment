@@ -1,0 +1,33 @@
+spring:
+  profiles:
+    active: test  # Set the active profile to 'test'
+
+---
+# Configuration for the 'test' profile
+spring:
+  profiles: test
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    initialization-mode: always
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Automatically create and drop tables for testing
+    show-sql: true          # Show SQL queries in the console
+    properties:
+      hibernate:
+        format_sql: true    # Format SQL for readability
+  h2:
+    console:
+      enabled: true         # Enable H2 console for debugging
+
+logging:
+  level:
+    root: INFO
+    org.hibernate.SQL: DEBUG # Enable Hibernate SQL logging
+
+app:
+  feature:
+    radius: 5000 # Define a search radius in meters
