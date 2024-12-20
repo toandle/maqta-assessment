@@ -29,7 +29,7 @@ results. Only car parks with available parking lots should be returned.
 
 - Steps
     + Stay in the root folder, open terminal and  run command `docker-compose up -d`
-    + Run command `gradlew flywayMigration` to create `car_park` table 
+    + Run command `gradlew flywayMigrate` to create `car_park` table 
     + Import CSV file to `car_park` table in Postgres 
     + Start the server, server will listen at port 8081
     + Download response from API https://api.data.gov.sg/v1/transport/carpark-availability and save to json file
